@@ -20,6 +20,8 @@
         .login-container { display: flex; flex-direction: column; justify-content: center; margin-top: 50px; }
         h2 { color: #2c3e50; margin-bottom: 10px; font-size: 24px; }
         p.subtitle { color: #7f8c8d; margin-bottom: 25px; font-size: 14px; }
+        
+        /* लॉगिन इनपुट और बटन */
         input[type="text"] {
             width: 100%; padding: 12px; margin-bottom: 20px;
             border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px; outline: none;
@@ -30,6 +32,7 @@
             color: white; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.3s; width: 100%;
         }
         .btn:hover { opacity: 0.9; }
+        .btn:disabled { background: #b2bec3; cursor: not-allowed; }
         
         /* ट्रैकर की स्टाइलिंग */
         #trackerApp { display: none; } /* शुरुआत में ट्रैकर छुपा रहेगा */
@@ -47,24 +50,24 @@
             background-color: #f1f2f6; border-radius: 8px; font-weight: bold;
             cursor: pointer; transition: all 0.3s ease; user-select: none; font-size: 14px; color: #57606f;
         }
-        .day-box.completed { background: #2ed573; color: white; transform: scale(1.05); }
+        .day-box.completed { background: #2ed573; color: white; transform: scale(1.05); box-shadow: 0 4px 10px rgba(46, 213, 115, 0.4); }
         .day-box.locked { opacity: 0.5; cursor: not-allowed; }
         
         .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .logout-btn { background-color: #ff6b81; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px;}
+        .logout-btn { background-color: #ff6b81; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: bold;}
     </style>
 </head>
 <body>
 
-    <!-- लॉगिन स्क्रीन -->
+    <!-- 1. लॉगिन स्क्रीन -->
     <div class="login-container" id="loginScreen">
         <h2>स्वागत है! ✨</h2>
-        <p class="subtitle">21 दिन के मेनिफेस्टेशन ट्रैकर में अपना नाम दर्ज करें</p>
+        <p class="subtitle">21 दिन के ट्रैकर में एक्सेस के लिए अपना नाम दर्ज करें</p>
         <input type="text" id="usernameInput" placeholder="अपना नाम यहाँ लिखें..." autocomplete="off">
         <button class="btn" onclick="startTracking()">शुरू करें</button>
     </div>
 
-    <!-- मेन ट्रैकर ऐप -->
+    <!-- 2. मेन ट्रैकर ऐप -->
     <div class="container" id="trackerApp">
         <div class="header-top">
             <h3 id="welcomeText" style="color: #4facfe; font-size: 18px;"></h3>
@@ -85,36 +88,63 @@
 
     <script>
         const totalDays = 21;
+        // आपका Google Apps Script Web App URL
         const scriptURL = 'https://script.google.com/macros/s/AKfycbx8_3vivpJyHYu-bzd0xLuwLrUyBikWgRKXSo0trTJ5B6p_JzGux22mNu_iOExdDqjSow/exec'; 
 
         let currentUser = localStorage.getItem('currentUser');
         let completedDays = [];
         let lastCheckedDate = '';
 
-        // चेक करें कि यूज़र पहले से लॉगिन है या नहीं
+        // अगर यूज़र पहले से लॉगिन है, तो सीधा ट्रैकर खोलें
         if (currentUser) {
             loadUserData();
         }
 
-        // लॉगिन बटन का फंक्शन
-        function startTracking() {
+        // --- लॉगिन और एडमिन वेरिफिकेशन ---
+        async function startTracking() {
             const nameInput = document.getElementById('usernameInput').value.trim();
             if (nameInput === "") {
                 alert("कृपया अपना नाम दर्ज करें!");
                 return;
             }
-            currentUser = nameInput;
-            localStorage.setItem('currentUser', currentUser);
-            loadUserData();
+
+            const btn = document.querySelector('.btn');
+            btn.innerText = "डेटाबेस चेक कर रहे हैं..."; 
+            btn.disabled = true;
+
+            try {
+                // Apps Script से Approved Users की लिस्ट मंगाएं (GET Request)
+                const response = await fetch(scriptURL);
+                const data = await response.json();
+                
+                const approvedUsers = data.users || [];
+                const inputLower = nameInput.toLowerCase(); 
+
+                // चेक करें कि नाम अप्रूव्ड लिस्ट में है या नहीं
+                if (approvedUsers.includes(inputLower)) {
+                    currentUser = nameInput;
+                    localStorage.setItem('currentUser', currentUser);
+                    loadUserData(); // एक्सेस दें
+                } else {
+                    alert("क्षमा करें! आपका नाम एडमिन की अप्रूवल लिस्ट में नहीं है। कृपया एक्सेस के लिए संपर्क करें।");
+                    btn.innerText = "शुरू करें";
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                console.error("Fetch Error:", error);
+                alert("सर्वर से कनेक्ट नहीं हो सका। कृपया अपना इंटरनेट चेक करें।");
+                btn.innerText = "शुरू करें";
+                btn.disabled = false;
+            }
         }
 
-        // यूज़र का डेटा लोड करने का फंक्शन
+        // --- यूज़र डेटा लोड करना ---
         function loadUserData() {
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('trackerApp').style.display = 'block';
             document.getElementById('welcomeText').innerText = `नमस्ते, ${currentUser}`;
 
-            // हर यूज़र का डेटा उसके नाम से सेव होगा (जैसे: data_Nandu)
+            // यूज़र के नाम के अनुसार डेटा लोड करें
             completedDays = JSON.parse(localStorage.getItem(`habitData_${currentUser}`)) || [];
             lastCheckedDate = localStorage.getItem(`lastDate_${currentUser}`) || '';
 
@@ -122,13 +152,13 @@
             initTracker();
         }
 
-        // लॉगआउट करने का फंक्शन
+        // --- लॉगआउट ---
         function logoutUser() {
             localStorage.removeItem('currentUser');
-            location.reload(); // पेज रिफ्रेश करें
+            location.reload(); 
         }
 
-        // स्ट्रीक चेक (1 दिन मिस होने पर रीसेट)
+        // --- स्ट्रीक चेक (1 दिन मिस होने पर रीसेट) ---
         function checkStreak() {
             if (completedDays.length > 0 && lastCheckedDate !== '') {
                 const today = new Date();
@@ -139,8 +169,9 @@
                 const diffTime = today.getTime() - lastDate.getTime();
                 const diffDays = diffTime / (1000 * 3600 * 24);
 
+                // अगर 1 दिन से ज़्यादा का गैप है
                 if (diffDays > 1) {
-                    alert(`ओह नो ${currentUser}! आपने एक दिन मिस कर दिया। आपको फिर से दिन 1 से शुरू करना होगा।`);
+                    alert(`ओह नो ${currentUser}! आपने एक दिन मिस कर दिया। नियम के अनुसार आपको फिर से दिन 1 से शुरू करना होगा।`);
                     completedDays = [];
                     lastCheckedDate = '';
                     saveLocalData();
@@ -149,6 +180,7 @@
             }
         }
 
+        // --- ट्रैकर UI बनाना ---
         function initTracker() {
             const grid = document.getElementById('trackerGrid');
             grid.innerHTML = '';
@@ -160,7 +192,7 @@
                 if (completedDays.includes(i)) {
                     dayDiv.classList.add('completed');
                 } else if (i > completedDays.length + 1) {
-                    dayDiv.classList.add('locked');
+                    dayDiv.classList.add('locked'); // जो दिन नहीं आए, उन्हें लॉक करें
                 }
 
                 dayDiv.addEventListener('click', () => toggleDay(i, dayDiv));
@@ -169,26 +201,30 @@
             updateProgress();
         }
 
+        // --- दिन पर क्लिक करने का लॉजिक ---
         function toggleDay(dayNumber, element) {
             const todayISO = new Date().toISOString(); 
             const todayStr = new Date().toDateString();
             let lastCheckedStr = lastCheckedDate ? new Date(lastCheckedDate).toDateString() : "";
 
+            // अगर दिन पहले से टिक है (हटाने का लॉजिक)
             if (completedDays.includes(dayNumber)) {
                 if (dayNumber === completedDays.length && lastCheckedStr === todayStr) {
                     completedDays.pop();
-                    lastCheckedDate = ''; 
+                    lastCheckedDate = ''; // आज का टिक हटाया, तो डेट रीसेट
                 } else {
-                    alert("आप पुराने दिनों को नहीं हटा सकते!");
+                    alert("आप पुराने पूरे किए गए दिनों को नहीं हटा सकते!");
                     return;
                 }
-            } else {
+            } 
+            // नया दिन टिक करने का लॉजिक
+            else {
                 if (dayNumber !== completedDays.length + 1) {
-                    alert(`क्रम से चलें! आपका अगला दिन Day ${completedDays.length + 1} है।`);
+                    alert(`कृपया क्रम से चलें! आपका अगला दिन Day ${completedDays.length + 1} है।`);
                     return;
                 }
                 if (lastCheckedStr === todayStr) {
-                    alert("आज का टास्क पूरा हो गया है! कल वापस आएं।");
+                    alert("आपने आज का टास्क पहले ही पूरा कर लिया है! कृपया कल वापस आएं।");
                     return;
                 }
                 
@@ -201,12 +237,13 @@
             saveDataToSheet();
         }
 
-        // यूज़र के नाम से लोकल स्टोरेज में सेव करें
+        // --- लोकल स्टोरेज में सेव करना ---
         function saveLocalData() {
             localStorage.setItem(`habitData_${currentUser}`, JSON.stringify(completedDays));
             localStorage.setItem(`lastDate_${currentUser}`, lastCheckedDate);
         }
 
+        // --- प्रोग्रेस बार अपडेट करना ---
         function updateProgress() {
             const progressBar = document.getElementById('progressBar');
             const statusText = document.getElementById('statusText');
@@ -215,10 +252,10 @@
             statusText.innerText = `${completedDays.length} / ${totalDays} दिन पूरे हुए`;
         }
 
-        // डेटा को Google Sheets पर यूज़र के नाम के साथ भेजें
+        // --- Google Sheets में डेटा सेव करना (POST Request) ---
         function saveDataToSheet() {
             const data = {
-                username: currentUser, // यहाँ यूज़र का नाम जा रहा है
+                username: currentUser,
                 totalCompleted: completedDays.length,
                 daysArray: completedDays
             };
@@ -229,8 +266,8 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             })
-            .then(() => console.log('डेटा सेव हो गया!'))
-            .catch(error => console.error('एरर:', error));
+            .then(() => console.log('डेटा Google Sheet में सेव हो गया!'))
+            .catch(error => console.error('डेटा सेव एरर:', error));
         }
     </script>
 </body>
